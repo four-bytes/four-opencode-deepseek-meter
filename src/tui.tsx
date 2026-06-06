@@ -55,9 +55,10 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
       const data = (await res.json()) as BalanceResponse;
       const info = data.balance_infos?.[0];
       if (info) {
-        const amount = parseFloat(info.topped_up_balance || info.total_balance).toFixed(2);
+        const raw = parseFloat(info.topped_up_balance || info.total_balance);
+        const amount = raw.toFixed(2);
         setStatus(`${info.currency} ${amount}`);
-        setStatusColor(theme().success);
+        setStatusColor(raw < 3.0 ? theme().warning : theme().success);
       } else {
         setStatus("no data");
         setStatusColor(theme().warning);

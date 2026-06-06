@@ -1,3 +1,13 @@
+import { rmSync } from "node:fs";
+
+// Prune dist before building
+rmSync("dist", { recursive: true, force: true });
+
+// 1. TUI build: tsc strips types, preserves JSX → .jsx + .d.ts
+//    (also compiles server.ts, but Bun.build overrides it below)
+await Bun.$`bunx tsc`;
+
+// 2. Server build: Bun bundler for optimized output
 const server = await Bun.build({
   entrypoints: ["src/four-opencode-deepseek-meter.ts"],
   outdir: "dist",
@@ -11,11 +21,15 @@ if (!server.success) {
   process.exit(1);
 }
 
-// TUI: raw copy — opencode loads TSX with @opentui/solid pragma at runtime
-await Bun.write("dist/four-opencode-deepseek-meter-tui.jsx", Bun.file("src/tui.tsx"));
-
+// Report outputs
 for (const out of server.outputs) {
   console.log(`  ${out.path.padEnd(46)} ${(out.size / 1024).toFixed(2)} KB`);
 }
-console.log(`  ${"dist/four-opencode-deepseek-meter-tui.jsx".padEnd(46)} ${(Bun.file("dist/four-opencode-deepseek-meter-tui.jsx").size / 1024).toFixed(2)} KB`);
-console.log(`\n✅ Built 2 files`);
+for (const f of ["dist/tui.jsx", "dist/tui.d.ts", "dist/four-opencode-deepseek-meter.d.ts"]) {
+  const file = Bun.file(f);
+  if (await file.exists()) {
+    const size = (await file.arrayBuffer()).byteLength;
+    console.log(`  ${f.padEnd(46)} ${(size / 1024).toFixed(2)} KB`);
+  }
+}
+console.log(`\n✅ Built (tsc TUI + Bun server)`);
