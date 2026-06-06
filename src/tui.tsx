@@ -18,7 +18,7 @@ function isDeepSeek(p: any): boolean {
 }
 
 function findDeepSeekKey(api: TuiPluginApi): string | undefined {
-  const provs = api.state.provider ?? [];
+  const provs = api.state?.provider ?? [];
   for (const p of provs) {
     if (!isDeepSeek(p)) continue;
     if (p.key) return p.key;
@@ -77,7 +77,7 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
 
   const lastMsg = createMemo(() => {
     if (!props.session_id) return null;
-    const msgs = props.api.state.session.messages(props.session_id);
+    const msgs = props.api.state?.session?.messages(props.session_id);
     return msgs[msgs.length - 1];
   });
 

@@ -19,25 +19,35 @@
     "balance"
   ],
   "exports": {
-    "./server": {
+    ".": {
+      "types": "./dist/four-opencode-deepseek-meter.js",
       "import": "./dist/four-opencode-deepseek-meter.js"
     },
+    "./server": {
+      "types": "./dist/four-opencode-deepseek-meter.js",
+      "import": "./dist/four-opencode-deepseek-meter.js",
+      "config": {
+        "enabled": true
+      }
+    },
     "./tui": {
+      "types": "./dist/four-opencode-deepseek-meter-tui.jsx",
       "import": "./dist/four-opencode-deepseek-meter-tui.jsx",
       "config": {
-        "sidebar": "true"
+        "enabled": true,
+        "sidebar": true
       }
     }
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.4.3",
-    "@opentui/solid": ">=0.2.2",
-    "solid-js": ">=1.9.12"
+    "@opencode-ai/plugin": ">=1.16.2",
+    "@opentui/solid": ">=0.3.2",
+    "solid-js": ">=1.9.13"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": ">=1.4.3",
-    "@opentui/solid": ">=0.2.2",
-    "solid-js": ">=1.9.12",
+    "@opencode-ai/plugin": ">=1.16.2",
+    "@opentui/solid": ">=0.3.2",
+    "solid-js": ">=1.9.13",
     "@types/bun": ">=1.3.8",
     "typescript": ">=5.7.3"
   }

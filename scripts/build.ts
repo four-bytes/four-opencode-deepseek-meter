@@ -6,21 +6,16 @@ const server = await Bun.build({
   minify: process.env.NODE_ENV === "production",
 });
 
-const tui = await Bun.build({
-  entrypoints: ["src/tui.tsx"],
-  outdir: "dist",
-  target: "bun",
-  naming: "four-opencode-deepseek-meter-tui.jsx",
-  external: ["@opencode-ai/*", "@opentui/*", "solid-js"],
-  minify: process.env.NODE_ENV === "production",
-});
-
-if (!server.success || !tui.success) {
-  for (const log of [...server.logs, ...tui.logs]) console.error(log);
+if (!server.success) {
+  for (const log of server.logs) console.error(log);
   process.exit(1);
 }
 
-for (const out of [...server.outputs, ...tui.outputs]) {
+// TUI: raw copy — opencode loads TSX with @opentui/solid pragma at runtime
+await Bun.write("dist/four-opencode-deepseek-meter-tui.jsx", Bun.file("src/tui.tsx"));
+
+for (const out of server.outputs) {
   console.log(`  ${out.path.padEnd(46)} ${(out.size / 1024).toFixed(2)} KB`);
 }
+console.log(`  ${"dist/four-opencode-deepseek-meter-tui.jsx".padEnd(46)} ${(Bun.file("dist/four-opencode-deepseek-meter-tui.jsx").size / 1024).toFixed(2)} KB`);
 console.log(`\n✅ Built 2 files`);
