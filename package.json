@@ -20,16 +20,12 @@
   ],
   "exports": {
     "./server": {
-      "import": "./dist/four-opencode-deepseek-meter.js",
-      "config": {
-        "enabled": true
-      }
+      "import": "./dist/four-opencode-deepseek-meter.js"
     },
     "./tui": {
-      "import": "./dist/tui.tsx",
+      "import": "./dist/four-opencode-deepseek-meter-tui.jsx",
       "config": {
-        "enabled": true,
-        "sidebar": true
+        "sidebar": "true"
       }
     }
   },
