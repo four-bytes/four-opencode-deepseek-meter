@@ -2,10 +2,6 @@
 
 opencode Plugin: shows DeepSeek API balance in the TUI sidebar.
 
-## Status
-
-Wave P13, Beta.
-
 ## Installation
 
 ```bash
@@ -14,7 +10,7 @@ bun install @four-bytes/four-opencode-deepseek-meter
 
 ## Configuration
 
-Requires `DEEPSEEK_API_KEY` environment variable.
+Reads the DeepSeek API key from the opencode provider configuration — no `DEEPSEEK_API_KEY` env var needed.
 
 Load in opencode via directory path (dual server + tui plugin):
 
@@ -28,15 +24,14 @@ Load in opencode via directory path (dual server + tui plugin):
 
 ## Usage
 
-Start opencode and you'll see `DEEPSEEK` in the right-hand sidebar showing your current balance. Polls every 60 seconds.
+Start opencode with a DeepSeek provider configured. You'll see `DEEPSEEK` in the right-hand sidebar showing your current balance. Polls every 60 seconds.
 
 ## Build
 
 ```bash
-bun run build       # server plugin
-bun run build:tui   # TUI sidebar component
+bun run build
 ```
 
 ## License
 
-Apache-2.0 — see [LICENSE](../LICENSE)
+Apache-2.0
