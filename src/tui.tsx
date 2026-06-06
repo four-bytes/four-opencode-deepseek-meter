@@ -1,14 +1,34 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, onMount, onCleanup, Show } from "solid-js";
+import { createSignal, createMemo, onCleanup, onMount, Show } from "solid-js";
 import type { TuiPlugin } from "@opencode-ai/plugin/tui";
 
 const BALANCE_URL = "https://api.deepseek.com/user/balance";
-const POLL_MS = 60_000;
+const REFRESH_INTERVAL_MS = 30_000;
+const SIDEBAR_ORDER = 55;
 
-const GREEN = "#22c55e";
-const YELLOW = "#eab308";
-const RED = "#ef4444";
-const ORANGE = "#f97316";
+interface Palette {
+  subtle: string;
+  text: string;
+  muted: string;
+  accent: string;
+  warning: string;
+}
+
+const getPalette = (theme: Record<string, unknown>): Palette => {
+  const get = (name: string, fallback: string): string => {
+    const value = theme[name];
+    if (typeof value === "string") return value;
+    return fallback;
+  };
+
+  return {
+    subtle: get("borderSubtle", "#2a2a2a"),
+    text: get("text", "#f0f0f0"),
+    muted: get("textMuted", "#a5a5a5"),
+    accent: get("primary", "#5f87ff"),
+    warning: get("warning", "#d7a94b"),
+  };
+};
 
 interface BalanceInfo {
   currency: string;
@@ -22,7 +42,23 @@ interface BalanceResponse {
   balance_infos: BalanceInfo[];
 }
 
-function DeepseekBalance() {
+const BALANCE_GREEN = "#22c55e";
+const BALANCE_YELLOW = "#eab308";
+const BALANCE_ORANGE = "#f97316";
+const BALANCE_RED = "#ef4444";
+
+const BalanceRow = (props: { palette: Palette; label: string; value: string; color?: string }) => (
+  <box width="100%" flexDirection="row">
+    <box flexGrow={1}>
+      <text fg={props.palette.muted}>{props.label}</text>
+    </box>
+    <box justifyContent="flex-end">
+      <text fg={props.color ?? props.palette.text}>{props.value}</text>
+    </box>
+  </box>
+);
+
+const DeepseekBalance = (props: { palette: Palette }) => {
   const [balance, setBalance] = createSignal<BalanceInfo | null>(null);
   const [isAvailable, setIsAvailable] = createSignal(true);
   const [loading, setLoading] = createSignal(true);
@@ -53,7 +89,7 @@ function DeepseekBalance() {
       } else {
         setErrorMsg("No balance data");
       }
-    } catch (err) {
+    } catch {
       if (!balance()) {
         setErrorMsg("DeepSeek API unreachable");
       }
@@ -62,25 +98,19 @@ function DeepseekBalance() {
     }
   };
 
-  onMount(() => {
-    void fetchBalance();
-    const timer = setInterval(() => void fetchBalance(), POLL_MS);
-    onCleanup(() => clearInterval(timer));
-  });
-
-  const totalNum = () => {
+  const totalNum = createMemo(() => {
     const b = balance();
     if (!b) return 0;
     return parseFloat(b.total_balance) || 0;
-  };
+  });
 
-  const balanceColor = () => {
+  const balanceColor = createMemo(() => {
     const n = totalNum();
-    if (n <= 0) return RED;
-    if (n < 1) return ORANGE;
-    if (n < 10) return YELLOW;
-    return GREEN;
-  };
+    if (n <= 0) return BALANCE_RED;
+    if (n < 1) return BALANCE_ORANGE;
+    if (n < 10) return BALANCE_YELLOW;
+    return BALANCE_GREEN;
+  });
 
   const formatBalance = (value: string) => {
     const n = parseFloat(value);
@@ -88,58 +118,68 @@ function DeepseekBalance() {
     return n.toFixed(2);
   };
 
+  const toppedUp = createMemo(() => {
+    const b = balance();
+    if (!b) return "";
+    const amount = b.topped_up_balance || b.total_balance;
+    return `${b.currency} ${formatBalance(amount)}`;
+  });
+
+  const granted = createMemo(() => {
+    const b = balance();
+    if (!b?.granted_balance) return "";
+    return `${b.currency} ${formatBalance(b.granted_balance)}`;
+  });
+
+  onMount(() => {
+    void fetchBalance();
+    const timer = setInterval(() => void fetchBalance(), REFRESH_INTERVAL_MS);
+    onCleanup(() => clearInterval(timer));
+  });
+
   return (
     <box width="100%" flexDirection="column">
       <box flexDirection="row" justifyContent="space-between" width="100%">
-        <text fg="#5f87ff">
+        <text fg={props.palette.accent}>
           <b>DEEPSEEK</b>
         </text>
         <Show when={loading()}>
-          <text fg="#a5a5a5">...</text>
+          <text fg={props.palette.muted}>...</text>
         </Show>
       </box>
 
       <Show when={errorMsg()}>
-        {(msg) => <text fg={ORANGE}>{msg()}</text>}
+        {(msg) => <text fg={props.palette.warning}>{msg()}</text>}
       </Show>
 
-      <Show when={!loading() && !errorMsg() && balance()}>
-        <box flexDirection="column" marginTop={0}>
-          <box flexDirection="row" justifyContent="space-between">
-            <text fg="#a5a5a5">
-              {balance()!.currency} {balance()!.topped_up_balance ? "topped up" : "balance"}
-            </text>
-            <text fg={balanceColor()}>
-              <b>
-                {balance()!.currency}{" "}
-                {formatBalance(balance()!.topped_up_balance || balance()!.total_balance)}
-              </b>
-            </text>
-          </box>
-          <Show when={balance()!.granted_balance && parseFloat(balance()!.granted_balance) > 0}>
-            <box flexDirection="row" justifyContent="space-between">
-              <text fg="#a5a5a5">granted</text>
-              <text fg="#a5a5a5">
-                {balance()!.currency} {formatBalance(balance()!.granted_balance)}
-              </text>
-            </box>
-          </Show>
-          <Show when={!isAvailable()}>
-            <text fg={RED}>⚠ balance unavailable</text>
-          </Show>
-        </box>
+      <Show when={!loading() && balance()}>
+        <BalanceRow palette={props.palette} label="balance" value={toppedUp()} color={balanceColor()} />
+        <Show when={granted()}>
+          <BalanceRow palette={props.palette} label="granted" value={granted()} />
+        </Show>
+        <Show when={!isAvailable()}>
+          <text fg={props.palette.warning}>⚠ unavailable</text>
+        </Show>
       </Show>
     </box>
   );
-}
+};
+
+const SidebarBalance = (props: { theme: Record<string, unknown> }) => {
+  const palette = createMemo(() => getPalette(props.theme));
+  return <DeepseekBalance palette={palette()} />;
+};
 
 const tui: TuiPlugin = (api) => {
   api.slots.register({
-    order: 60,
+    order: SIDEBAR_ORDER,
     slots: {
-      sidebar_content: () => <DeepseekBalance />,
+      sidebar_content(ctx) {
+        return <SidebarBalance theme={ctx.theme.current as Record<string, unknown>} />;
+      },
     },
   });
+
   return Promise.resolve();
 };
 
