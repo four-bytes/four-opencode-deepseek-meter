@@ -1,7 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, createMemo, onCleanup, onMount, Show } from "solid-js";
 import type { TuiPlugin } from "@opencode-ai/plugin/tui";
-import { logDebugEvent } from "./debug-logger.js";
 
 const BALANCE_URL = "https://api.deepseek.com/user/balance";
 const REFRESH_INTERVAL_MS = 30_000;
@@ -68,49 +67,33 @@ const DeepseekBalance = (props: { palette: Palette }) => {
   const fetchBalance = async () => {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
-      logDebugEvent("fetch.error", { reason: "no_api_key" });
       setErrorMsg("DEEPSEEK_API_KEY not set");
       setLoading(false);
       return;
     }
 
     try {
-      const started = Date.now();
       const res = await fetch(BALANCE_URL, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           Accept: "application/json",
         },
       });
-
       if (!res.ok) {
-        const status = res.status;
-        logDebugEvent("fetch.error", { status, ms: Date.now() - started });
-        setErrorMsg(`DeepSeek API ${status}`);
+        setErrorMsg(`DeepSeek API ${res.status}`);
         setLoading(false);
         return;
       }
-
       const data = (await res.json()) as BalanceResponse;
       const info = data.balance_infos?.[0];
       if (info) {
-        logDebugEvent("fetch.ok", {
-          currency: info.currency,
-          total: info.total_balance,
-          ms: Date.now() - started,
-        });
         setBalance(info);
         setIsAvailable(data.is_available);
         setErrorMsg("");
       } else {
-        logDebugEvent("fetch.error", { reason: "empty_balance_infos" });
         setErrorMsg("No balance data");
       }
-    } catch (err) {
-      logDebugEvent("fetch.error", {
-        reason: "network",
-        message: err instanceof Error ? err.message : String(err),
-      });
+    } catch {
       if (!balance()) {
         setErrorMsg("DeepSeek API unreachable");
       }
@@ -153,7 +136,6 @@ const DeepseekBalance = (props: { palette: Palette }) => {
   });
 
   onMount(() => {
-    logDebugEvent("lifecycle", { event: "mount" });
     void fetchBalance();
     const timer = setInterval(() => void fetchBalance(), REFRESH_INTERVAL_MS);
     onCleanup(() => clearInterval(timer));
@@ -193,8 +175,6 @@ const SidebarBalance = (props: { theme: Record<string, unknown> }) => {
 };
 
 const tui: TuiPlugin = (api) => {
-  logDebugEvent("lifecycle", { event: "init", hasApiKey: !!process.env.DEEPSEEK_API_KEY });
-
   api.slots.register({
     order: SIDEBAR_ORDER,
     slots: {
