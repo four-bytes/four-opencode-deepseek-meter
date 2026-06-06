@@ -6,8 +6,8 @@
   "type": "module",
   "main": "dist/four-opencode-deepseek-meter.js",
   "scripts": {
-    "build": "NODE_ENV=production bun build src/four-opencode-deepseek-meter.ts --outdir=dist --target=bun --external \"@opencode-ai/*\"",
-    "build:tui": "NODE_ENV=production bun build src/tui.tsx --outfile=dist/four-opencode-deepseek-meter-tui.jsx --target=bun --external \"@opencode-ai/*\" --external \"@opentui/*\" --external \"solid-js\"",
+    "build": "NODE_ENV=production bun run scripts/build.ts",
+    "dev": "bun run scripts/build.ts",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test"
   },
