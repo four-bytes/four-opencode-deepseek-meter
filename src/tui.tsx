@@ -10,10 +10,6 @@ interface BalanceResponse {
   balance_infos: { currency: string; total_balance: string; topped_up_balance: string }[];
 }
 
-const GREEN = "#22c55e";
-const ORANGE = "#f97316";
-const RED = "#ef4444";
-
 function isDeepSeek(p: any): boolean {
   const id = String(p.id ?? "").toLowerCase();
   if (id.includes("deepseek")) return true;
@@ -43,7 +39,7 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
     const apiKey = findDeepSeekKey(props.api);
     if (!apiKey) {
       setStatus("no key");
-      setStatusColor(ORANGE);
+      setStatusColor(theme().warning);
       return;
     }
 
@@ -53,7 +49,7 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
       });
       if (!res.ok) {
         setStatus(`API ${res.status}`);
-        setStatusColor(RED);
+        setStatusColor(theme().error);
         return;
       }
       const data = (await res.json()) as BalanceResponse;
@@ -61,14 +57,14 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
       if (info) {
         const amount = parseFloat(info.topped_up_balance || info.total_balance).toFixed(2);
         setStatus(`${info.currency} ${amount}`);
-        setStatusColor(GREEN);
+        setStatusColor(theme().success);
       } else {
         setStatus("no data");
-        setStatusColor(ORANGE);
+        setStatusColor(theme().warning);
       }
     } catch {
       setStatus("unreachable");
-      setStatusColor(RED);
+      setStatusColor(theme().error);
     }
   };
 
