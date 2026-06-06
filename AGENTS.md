@@ -9,7 +9,8 @@ Pointer to central standards: `~/.personal-config/ai-shared/AGENTS.md` and meta-
 - ESM, Bun-targeted, strict TypeScript
 
 ## Build Discipline (MANDATORY)
-- EVERY code change ends with: version bump in `package.json` + `bun run build && bun run build:tui`
+- ONE build step: `bun run build` produces both `dist/four-opencode-deepseek-meter.js` (server) + `dist/four-opencode-deepseek-meter-tui.jsx` (TUI)
+- Build script: `scripts/build.ts` uses `Bun.build()` with both entrypoints
 - No merge without current `dist/`
 - `dist/` is gitignored, freshly built on `npm publish`
 
