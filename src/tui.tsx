@@ -1,9 +1,9 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
 
 const BALANCE_URL = "https://api.deepseek.com/user/balance";
-const REFRESH_INTERVAL_MS = 60_000;
+const MIN_REFRESH_INTERVAL_MS = 10_000;
 const SIDEBAR_ORDER = 55;
 
 interface BalanceResponse {
@@ -31,11 +31,13 @@ function findDeepSeekKey(api: TuiPluginApi): string | undefined {
   return undefined;
 }
 
-function DeepseekView(props: { api: TuiPluginApi }) {
+function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
   const theme = () => props.api.theme.current;
 
   const [status, setStatus] = createSignal("loading...");
   const [statusColor, setStatusColor] = createSignal(theme().textMuted);
+
+  let lastFetch = 0;
 
   const fetchBalance = async () => {
     const apiKey = findDeepSeekKey(props.api);
@@ -70,10 +72,26 @@ function DeepseekView(props: { api: TuiPluginApi }) {
     }
   };
 
+  const throttledFetch = () => {
+    const now = Date.now();
+    if (now - lastFetch < MIN_REFRESH_INTERVAL_MS) return;
+    lastFetch = now;
+    void fetchBalance();
+  };
+
+  const lastMsg = createMemo(() => {
+    if (!props.session_id) return null;
+    const msgs = props.api.state.session.messages(props.session_id);
+    return msgs[msgs.length - 1];
+  });
+
+  createEffect(() => {
+    const last = lastMsg();
+    if (last?.role === "assistant") throttledFetch();
+  });
+
   onMount(() => {
     void fetchBalance();
-    const timer = setInterval(() => void fetchBalance(), REFRESH_INTERVAL_MS);
-    onCleanup(() => clearInterval(timer));
   });
 
   return (
@@ -89,7 +107,11 @@ function DeepseekView(props: { api: TuiPluginApi }) {
 const tui: TuiPlugin = async (api) => {
   api.slots.register({
     order: SIDEBAR_ORDER,
-    slots: { sidebar_content(_ctx, _props) { return <DeepseekView api={api} />; } },
+    slots: {
+      sidebar_content(_ctx, props) {
+        return <DeepseekView api={api} session_id={props.session_id} />;
+      },
+    },
   });
 };
 
