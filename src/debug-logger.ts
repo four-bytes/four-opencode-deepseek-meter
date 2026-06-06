@@ -10,33 +10,41 @@ export interface DebugEvent {
 
 const CACHE_DIR = join(homedir(), ".cache", "opencode", "four-opencode-deepseek-meter");
 
+let dirReady = false;
+function ensureDir(): boolean {
+  if (dirReady) return true;
+  try {
+    if (!existsSync(CACHE_DIR)) {
+      mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    dirReady = true;
+    return true;
+  } catch (err) {
+    console.error("[deepseek-meter] cannot create log dir:", CACHE_DIR, err);
+    return false;
+  }
+}
+
 function getLogPath(): string {
   const date = new Date().toISOString().split("T")[0];
   return join(CACHE_DIR, `debug-${date}.jsonl`);
 }
 
-function ensureDir(): void {
-  if (!existsSync(CACHE_DIR)) {
-    mkdirSync(CACHE_DIR, { recursive: true });
-  }
-}
-
 /**
  * Writes a JSON debug event to a daily JSONL file.
- * No-op unless DEEPSEEK_DEBUG === "true". Never throws.
+ * Always active (tiny output). Errors surface to stderr.
  */
 export function logDebugEvent(
   type: string,
   payload: Record<string, unknown>,
 ): void {
-  if (process.env.DEEPSEEK_DEBUG !== "true") return;
+  if (!ensureDir()) return;
 
   try {
-    ensureDir();
     const event: DebugEvent = { ts: Date.now(), type, ...payload };
     const line = JSON.stringify(event) + "\n";
     appendFileSync(getLogPath(), line, "utf-8");
-  } catch {
-    // Silent — never throw from debug logger
+  } catch (err) {
+    console.error("[deepseek-meter] log write failed:", err);
   }
 }
