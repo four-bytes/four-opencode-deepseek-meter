@@ -1,193 +1,120 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo, onCleanup, onMount, Show } from "solid-js";
-import type { TuiPlugin } from "@opencode-ai/plugin/tui";
+import { createEffect, createMemo, createSignal, onMount } from "solid-js";
+import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
 
 const BALANCE_URL = "https://api.deepseek.com/user/balance";
-const REFRESH_INTERVAL_MS = 30_000;
+const MIN_REFRESH_INTERVAL_MS = 10_000;
 const SIDEBAR_ORDER = 55;
 
-interface Palette {
-  subtle: string;
-  text: string;
-  muted: string;
-  accent: string;
-  warning: string;
-}
-
-const getPalette = (theme: Record<string, unknown>): Palette => {
-  const get = (name: string, fallback: string): string => {
-    const value = theme[name];
-    if (typeof value === "string") return value;
-    return fallback;
-  };
-
-  return {
-    subtle: get("borderSubtle", "#2a2a2a"),
-    text: get("text", "#f0f0f0"),
-    muted: get("textMuted", "#a5a5a5"),
-    accent: get("primary", "#5f87ff"),
-    warning: get("warning", "#d7a94b"),
-  };
-};
-
-interface BalanceInfo {
-  currency: string;
-  total_balance: string;
-  granted_balance: string;
-  topped_up_balance: string;
-}
-
 interface BalanceResponse {
-  is_available: boolean;
-  balance_infos: BalanceInfo[];
+  balance_infos: { currency: string; total_balance: string; topped_up_balance: string }[];
 }
 
-const BALANCE_GREEN = "#22c55e";
-const BALANCE_YELLOW = "#eab308";
-const BALANCE_ORANGE = "#f97316";
-const BALANCE_RED = "#ef4444";
+function isDeepSeek(p: any): boolean {
+  const id = String(p.id ?? "").toLowerCase();
+  if (id.includes("deepseek")) return true;
+  const bu = String(p.options?.baseURL ?? p.options?.baseUrl ?? "").toLowerCase();
+  return bu.includes("deepseek.com") || bu.includes("deepseek.ai");
+}
 
-const BalanceRow = (props: { palette: Palette; label: string; value: string; color?: string }) => (
-  <box width="100%" flexDirection="row">
-    <box flexGrow={1}>
-      <text fg={props.palette.muted}>{props.label}</text>
-    </box>
-    <box justifyContent="flex-end">
-      <text fg={props.color ?? props.palette.text}>{props.value}</text>
-    </box>
-  </box>
-);
+function findDeepSeekKey(api: TuiPluginApi): string | undefined {
+  const provs = api.state?.provider ?? [];
+  for (const p of provs) {
+    if (!isDeepSeek(p)) continue;
+    if (p.key) return p.key;
+    if (typeof p.options?.apiKey === "string" && p.options.apiKey) return p.options.apiKey;
+  }
+  return undefined;
+}
 
-const DeepseekBalance = (props: { palette: Palette }) => {
-  const [balance, setBalance] = createSignal<BalanceInfo | null>(null);
-  const [isAvailable, setIsAvailable] = createSignal(true);
-  const [loading, setLoading] = createSignal(true);
-  const [errorMsg, setErrorMsg] = createSignal("");
+function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
+  const theme = () => props.api.theme.current;
+
+  const [status, setStatus] = createSignal("loading...");
+  const [statusColor, setStatusColor] = createSignal(theme().textMuted);
+
+  let lastFetch = 0;
 
   const fetchBalance = async () => {
-    const apiKey = process.env.DEEPSEEK_API_KEY;
+    const apiKey = findDeepSeekKey(props.api);
     if (!apiKey) {
-      setErrorMsg("DEEPSEEK_API_KEY not set");
-      setLoading(false);
+      setStatus("no key");
+      setStatusColor(theme().warning);
       return;
     }
 
     try {
       const res = await fetch(BALANCE_URL, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "application/json",
-        },
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
       });
       if (!res.ok) {
-        setErrorMsg(`DeepSeek API ${res.status}`);
-        setLoading(false);
+        setStatus(`API ${res.status}`);
+        setStatusColor(theme().error);
         return;
       }
       const data = (await res.json()) as BalanceResponse;
       const info = data.balance_infos?.[0];
       if (info) {
-        setBalance(info);
-        setIsAvailable(data.is_available);
-        setErrorMsg("");
+        const raw = parseFloat(info.topped_up_balance || info.total_balance);
+        const amount = raw.toFixed(2);
+        setStatus(`${info.currency} ${amount}`);
+        setStatusColor(raw < 3.0 ? theme().warning : theme().success);
       } else {
-        setErrorMsg("No balance data");
+        setStatus("no data");
+        setStatusColor(theme().warning);
       }
     } catch {
-      if (!balance()) {
-        setErrorMsg("DeepSeek API unreachable");
-      }
-    } finally {
-      setLoading(false);
+      setStatus("unreachable");
+      setStatusColor(theme().error);
     }
   };
 
-  const totalNum = createMemo(() => {
-    const b = balance();
-    if (!b) return 0;
-    return parseFloat(b.total_balance) || 0;
-  });
-
-  const balanceColor = createMemo(() => {
-    const n = totalNum();
-    if (n <= 0) return BALANCE_RED;
-    if (n < 1) return BALANCE_ORANGE;
-    if (n < 10) return BALANCE_YELLOW;
-    return BALANCE_GREEN;
-  });
-
-  const formatBalance = (value: string) => {
-    const n = parseFloat(value);
-    if (isNaN(n)) return value;
-    return n.toFixed(2);
+  const throttledFetch = () => {
+    const now = Date.now();
+    if (now - lastFetch < MIN_REFRESH_INTERVAL_MS) return;
+    lastFetch = now;
+    void fetchBalance();
   };
 
-  const toppedUp = createMemo(() => {
-    const b = balance();
-    if (!b) return "";
-    const amount = b.topped_up_balance || b.total_balance;
-    return `${b.currency} ${formatBalance(amount)}`;
+  const lastMsg = createMemo(() => {
+    if (!props.session_id) return null;
+    const msgs = props.api.state?.session?.messages(props.session_id);
+    return msgs[msgs.length - 1];
   });
 
-  const granted = createMemo(() => {
-    const b = balance();
-    if (!b?.granted_balance) return "";
-    return `${b.currency} ${formatBalance(b.granted_balance)}`;
+  createEffect(() => {
+    const last = lastMsg();
+    if (last?.role === "assistant") throttledFetch();
   });
 
   onMount(() => {
     void fetchBalance();
-    const timer = setInterval(() => void fetchBalance(), REFRESH_INTERVAL_MS);
-    onCleanup(() => clearInterval(timer));
   });
 
   return (
     <box width="100%" flexDirection="column">
       <box flexDirection="row" justifyContent="space-between" width="100%">
-        <text fg={props.palette.accent}>
-          <b>DEEPSEEK</b>
-        </text>
-        <Show when={loading()}>
-          <text fg={props.palette.muted}>...</text>
-        </Show>
+        <text fg={theme().accent}><b>DEEPSEEK</b></text>
+        <text fg={statusColor()}>{status()}</text>
       </box>
-
-      <Show when={errorMsg()}>
-        {(msg) => <text fg={props.palette.warning}>{msg()}</text>}
-      </Show>
-
-      <Show when={!loading() && balance()}>
-        <BalanceRow palette={props.palette} label="balance" value={toppedUp()} color={balanceColor()} />
-        <Show when={granted()}>
-          <BalanceRow palette={props.palette} label="granted" value={granted()} />
-        </Show>
-        <Show when={!isAvailable()}>
-          <text fg={props.palette.warning}>⚠ unavailable</text>
-        </Show>
-      </Show>
     </box>
   );
-};
+}
 
-const SidebarBalance = (props: { theme: Record<string, unknown> }) => {
-  const palette = createMemo(() => getPalette(props.theme));
-  return <DeepseekBalance palette={palette()} />;
-};
-
-const tui: TuiPlugin = (api) => {
+const tui: TuiPlugin = async (api) => {
   api.slots.register({
     order: SIDEBAR_ORDER,
     slots: {
-      sidebar_content(ctx) {
-        return <SidebarBalance theme={ctx.theme.current as Record<string, unknown>} />;
+      sidebar_content(_ctx, props) {
+        return <DeepseekView api={api} session_id={props.session_id} />;
       },
     },
   });
-
-  return Promise.resolve();
 };
 
-export default {
+const plugin: TuiPluginModule & { id: string } = {
   id: "four-opencode-deepseek-meter",
   tui,
 };
+
+export default plugin;
