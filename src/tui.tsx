@@ -1,6 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import { createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
+import { findDeepSeekKey } from "./key-resolver.js";
+import os from "node:os";
+import path from "node:path";
 
 const BALANCE_URL = "https://api.deepseek.com/user/balance";
 const MIN_REFRESH_INTERVAL_MS = 10_000;
@@ -8,23 +11,6 @@ const SIDEBAR_ORDER = 55;
 
 interface BalanceResponse {
   balance_infos: { currency: string; total_balance: string; topped_up_balance: string }[];
-}
-
-function isDeepSeek(p: any): boolean {
-  const id = String(p.id ?? "").toLowerCase();
-  if (id.includes("deepseek")) return true;
-  const bu = String(p.options?.baseURL ?? p.options?.baseUrl ?? "").toLowerCase();
-  return bu.includes("deepseek.com") || bu.includes("deepseek.ai");
-}
-
-function findDeepSeekKey(api: TuiPluginApi): string | undefined {
-  const provs = api.state?.provider ?? [];
-  for (const p of provs) {
-    if (!isDeepSeek(p)) continue;
-    if (p.key) return p.key;
-    if (typeof p.options?.apiKey === "string" && p.options.apiKey) return p.options.apiKey;
-  }
-  return undefined;
 }
 
 function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
@@ -36,10 +22,15 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
   let lastFetch = 0;
 
   const fetchBalance = async () => {
-    const apiKey = findDeepSeekKey(props.api);
+    const apiKey = findDeepSeekKey({
+      stateDir: props.api.state?.path?.state,
+      opencodeDir: path.join(os.homedir(), ".local", "share", "opencode"),
+      secretsDir: path.join(os.homedir(), ".secrets"),
+      env: process.env,
+    });
     if (!apiKey) {
-      setStatus("no key");
-      setStatusColor(theme().warning);
+      setStatus("NO KEY");
+      setStatusColor(theme().error);
       return;
     }
 
@@ -48,7 +39,11 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
         headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
       });
       if (!res.ok) {
-        setStatus(`API ${res.status}`);
+        if (res.status === 401 || res.status === 403) {
+          setStatus("INVALID KEY");
+        } else {
+          setStatus(`API ${res.status}`);
+        }
         setStatusColor(theme().error);
         return;
       }
