@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Four Flames GmbH & Co. KG
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { findDeepSeekKey, parseAuthKey } from "./key-resolver.js";
+import { findDeepSeekKey, opencodeDataDir, parseAuthKey } from "./key-resolver.js";
 
 const dirs: string[] = [];
 
@@ -52,30 +54,47 @@ describe("parseAuthKey", () => {
 });
 
 describe("findDeepSeekKey", () => {
-  test("auth.json (stateDir) primär", () => {
-    const d = tmpDir();
-    writeAuth(d, "sk-state");
-    expect(findDeepSeekKey({ stateDir: d })).toBe("sk-state");
+  /** Every source holds a different key, so each precedence step is observable. */
+  function allSources() {
+    const dataDir = tmpDir();
+    const stateDir = tmpDir();
+    const secretsDir = tmpDir();
+    writeAuth(dataDir, "sk-data");
+    writeAuth(stateDir, "sk-state");
+    writeSecret(secretsDir, "sk-secret");
+    return { dataDir, stateDir, secretsDir, env: { DEEPSEEK_API_KEY: "sk-env" } };
+  }
+
+  test("dataDir gewinnt über alle anderen Quellen", () => {
+    expect(findDeepSeekKey(allSources())).toBe("sk-data");
   });
 
-  test("stateDir gewinnt über alle anderen Quellen", () => {
-    const d = tmpDir();
-    writeAuth(d, "sk-state");
-    expect(
-      findDeepSeekKey({ stateDir: d, secretsDir: tmpDir(), env: { DEEPSEEK_API_KEY: "sk-env" } }),
-    ).toBe("sk-state");
+  test("stateDir vor secrets und env", () => {
+    const s = allSources();
+    expect(findDeepSeekKey({ ...s, dataDir: undefined })).toBe("sk-state");
   });
 
-  test("fallback auf opencodeDir", () => {
-    const d = tmpDir();
-    writeAuth(d, "sk-open");
-    expect(findDeepSeekKey({ opencodeDir: d })).toBe("sk-open");
+  test("secrets vor env", () => {
+    const s = allSources();
+    expect(findDeepSeekKey({ ...s, dataDir: undefined, stateDir: undefined })).toBe("sk-secret");
+  });
+
+  test("auth.json ohne deepseek-Key fällt auf die nächste Quelle zurück", () => {
+    const s = allSources();
+    writeAuth(s.dataDir, undefined);
+    expect(findDeepSeekKey(s)).toBe("sk-state");
   });
 
   test("kaputtes auth.json wird übersprungen", () => {
     const d = tmpDir();
     writeFileSync(path.join(d, "auth.json"), "{not json");
-    expect(findDeepSeekKey({ stateDir: d, env: { DEEPSEEK_API_KEY: "sk-env" } })).toBe("sk-env");
+    expect(findDeepSeekKey({ dataDir: d, env: { DEEPSEEK_API_KEY: "sk-env" } })).toBe("sk-env");
+  });
+
+  test("nicht lesbares auth.json wirft statt 'kein Key'", () => {
+    const d = tmpDir();
+    mkdirSync(path.join(d, "auth.json"));
+    expect(() => findDeepSeekKey({ dataDir: d, env: { DEEPSEEK_API_KEY: "sk-env" } })).toThrow();
   });
 
   test("fallback auf secrets", () => {
@@ -94,5 +113,19 @@ describe("findDeepSeekKey", () => {
 
   test("alles leer → undefined", () => {
     expect(findDeepSeekKey({})).toBeUndefined();
+  });
+});
+
+describe("opencodeDataDir", () => {
+  test("nutzt XDG_DATA_HOME", () => {
+    expect(opencodeDataDir({ XDG_DATA_HOME: "/xdg/data" }, "/home/u")).toBe(path.join("/xdg/data", "opencode"));
+  });
+
+  test("Default ~/.local/share/opencode", () => {
+    expect(opencodeDataDir({}, "/home/u")).toBe(path.join("/home/u", ".local", "share", "opencode"));
+  });
+
+  test("leeres XDG_DATA_HOME → Default", () => {
+    expect(opencodeDataDir({ XDG_DATA_HOME: "  " }, "/home/u")).toBe(path.join("/home/u", ".local", "share", "opencode"));
   });
 });

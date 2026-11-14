@@ -8,7 +8,7 @@
 
 ## Why?
 
-DeepSeek API has usage-based billing. This TUI sidebar shows your balance in real-time so you never hit zero unexpectedly. Auto-detects DeepSeek provider from opencode config. Color-coded warnings when balance drops below thresholds.
+DeepSeek API has usage-based billing. This TUI sidebar shows your balance in real-time so you never hit zero unexpectedly. Reads the DeepSeek key from opencode's auth.json (see Configuration). Color-coded warnings when balance drops below thresholds.
 
 ## Quickstart
 
@@ -35,11 +35,20 @@ Restart opencode.
 └──────────────────────┘
 ```
 
-Auto-refreshes after each assistant message (min 10s interval). Shows "no key" if DeepSeek provider not configured.
+Auto-refreshes after each assistant message (min 10s interval).
+
+Status messages: `NO KEY` (no key found), `KEY ERROR <code>` (a key file exists but cannot be read, e.g. `EACCES`), `INVALID KEY` (rejected by DeepSeek), `API <status>` (other API errors).
 
 ## Configuration
 
-No config file needed — reads API key from opencode provider config. Ensure DeepSeek is configured in opencode's model providers.
+No config file needed. The API key is taken from the first source that has one:
+
+1. `auth.json` in the opencode data dir — `$XDG_DATA_HOME/opencode/auth.json`, default `~/.local/share/opencode/auth.json` (written by `opencode auth login`)
+2. `auth.json` in the opencode state dir (fallback)
+3. `~/.secrets/deepseek-key` (plain text file)
+4. Environment variable `DEEPSEEK_API_KEY`
+
+A malformed `auth.json` is skipped.
 
 ## Contributing
 

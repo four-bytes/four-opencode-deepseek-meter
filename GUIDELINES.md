@@ -44,5 +44,5 @@ src/
 All new source files must include:
 ```typescript
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2026 Four Bytes / Four Flames GmbH & Co. KG
+// Copyright (c) 2026 Four Flames GmbH & Co. KG
 ```
