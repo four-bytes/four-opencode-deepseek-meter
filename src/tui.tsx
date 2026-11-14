@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { createEffect, createMemo, createSignal, onMount } from "solid-js";
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
-import { findDeepSeekKey } from "./key-resolver.js";
+import { findDeepSeekKey, opencodeDataDir } from "./key-resolver.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -22,12 +22,20 @@ function DeepseekView(props: { api: TuiPluginApi; session_id?: string }) {
   let lastFetch = 0;
 
   const fetchBalance = async () => {
-    const apiKey = findDeepSeekKey({
-      stateDir: props.api.state?.path?.state,
-      opencodeDir: path.join(os.homedir(), ".local", "share", "opencode"),
-      secretsDir: path.join(os.homedir(), ".secrets"),
-      env: process.env,
-    });
+    let apiKey: string | undefined;
+    try {
+      apiKey = findDeepSeekKey({
+        dataDir: opencodeDataDir(process.env),
+        stateDir: props.api.state?.path?.state,
+        secretsDir: path.join(os.homedir(), ".secrets"),
+        env: process.env,
+      });
+    } catch (err) {
+      // unreadable key file (permissions etc.) — not the same as a missing key
+      setStatus(`KEY ERROR ${(err as NodeJS.ErrnoException).code ?? ""}`.trim());
+      setStatusColor(theme().error);
+      return;
+    }
     if (!apiKey) {
       setStatus("NO KEY");
       setStatusColor(theme().error);

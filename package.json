@@ -1,6 +1,6 @@
 {
   "name": "@four-bytes/four-opencode-deepseek-meter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "opencode Plugin: shows DeepSeek API balance in the TUI sidebar",
   "license": "Apache-2.0",
   "type": "module",
