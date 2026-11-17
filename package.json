@@ -1,6 +1,6 @@
 {
   "name": "@four-bytes/four-opencode-deepseek-meter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "opencode Plugin: shows DeepSeek API balance in the TUI sidebar",
   "license": "Apache-2.0",
   "type": "module",
@@ -8,6 +8,7 @@
   "types": "dist/four-opencode-deepseek-meter.d.ts",
   "scripts": {
     "build": "NODE_ENV=production bun run scripts/build.ts",
+    "postinstall": "bun run build",
     "dev": "bun run scripts/build.ts",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test"
